@@ -14,44 +14,42 @@ content_template: templates/concept
 
 ## 소개
 
-Kubernetes 1.2 adds support for running a single cluster in multiple failure zones
-(GCE calls them simply "zones", AWS calls them "availability zones", here we'll refer to them as "zones").
-This is a lightweight version of a broader Cluster Federation feature (previously referred to by the affectionate
-nickname ["Ubernetes"](https://github.com/kubernetes/community/blob/{{< param "githubbranch" >}}/contributors/design-proposals/multicluster/federation.md)).
-Full Cluster Federation allows combining separate
-Kubernetes clusters running in different regions or cloud providers
-(or on-premises data centers).  However, many
-users simply want to run a more available Kubernetes cluster in multiple zones
-of their single cloud provider, and this is what the multizone support in 1.2 allows
-(this previously went by the nickname "Ubernetes Lite").
+쿠버네티스 1.2는 여러 실패 영역의 단일 클러스터 동작을 위한 지원을 추가했다.
+(여기서 이를 "영역"이라고 하며, GCE는 단순히 "영역"이라고 하고, AWS는 "가용 영역"이라고 부른다.)
+이것은 보다 광범위한 클러스터 연합의 경량화 버전이다. 
+(이전에는 별칭 ["Ubernetes"](https://github.com/kubernetes/community/blob/{{< param "githubbranch" >}}/contributors/design-proposals/multicluster/federation.md)로 불렸었다.)
+전체 클러스터 연합은 다른 지역이나 
+클라우드 공급자 (또는 온-프레미스 데이터 센터)에서 실행되는 
+쿠버네티스 클러스터를 결합 할 수 있다.
+그러나, 많은 사용자는 단일 클라우드 제공 업체의 여러 영역에서 
+보다 많은 쿠버네티스 클러스터를 실행하기를 원한다.
+이는 결국 1.2의 여러 영역 지원을 허용하는 것이다.(이전에는 별칭 "Ubernetes Lite"라는 별칭으로 사용되었다).
 
-Multizone support is deliberately limited: a single Kubernetes cluster can run
-in multiple zones, but only within the same region (and cloud provider).  Only
-GCE and AWS are currently supported automatically (though it is easy to
-add similar support for other clouds or even bare metal, by simply arranging
-for the appropriate labels to be added to nodes and volumes).
-
+여러영역 지원은 의도적으로 제한된다. 
+하나의 단일 쿠버네티스 클러스터는 여러 영역에서 실행할 수 있지만, 동일한 지역(및 클라우드 공급자) 내에서만 가능하다.
+오직 GCE와 AWS는 현재 자동적으로 지원한다. 
+(간단하게 노드 및 추가할 적절한 레이블을 정렬함으로써, 
+다른 클라우드 또는 베어메탈에 쉽게 유사한 지원을 추가할 수 있다.)
 
 ## 기능
 
-When nodes are started, the kubelet automatically adds labels to them with
-zone information.
+노드가 시작될 때, kubelet은 자동적으로 
+영역 정보와 함께 레이블을 추가한다.
 
-Kubernetes will automatically spread the pods in a replication controller
-or service across nodes in a single-zone cluster (to reduce the impact of
-failures.)  With multiple-zone clusters, this spreading behavior is
-extended across zones (to reduce the impact of zone failures.)  (This is
-achieved via `SelectorSpreadPriority`).  This is a best-effort
-placement, and so if the zones in your cluster are heterogeneous
-(e.g. different numbers of nodes, different types of nodes, or
-different pod resource requirements), this might prevent perfectly
-even spreading of your pods across zones. If desired, you can use
-homogeneous zones (same number and types of nodes) to reduce the
-probability of unequal spreading.
+쿠버네티스는 단일 영역 클러스터의 노드를 통해 자동으로 레플리케이션 컨트롤러나 
+서비스를 파드로 분산한다. (실패의 영향을 줄이기 위함.)
+다중 영역의 클러스터에서 이 분산하는 행동은 
+여러 영역으로 확장한다. (실패의 영향을 줄이기 위함.)
+(이것은 `SelectorSpreadPriority`로 이루어진다.).  
+이것은 최선의 배치이므로, 클러스터의 영역이 이기종일 경우,
+(예를 들면 다른 수의 노드, 다른 유형의 노드 또는 다른 파드의 리소스 요구 사항), 
+영역을 가로질러 파드로 완벽하게 분산되지 않을 수 있다.
+원한다면, 균등 영역(같은 수의 노드와 같은 유형의 노드)을 사용하여 
+불균등하게 퍼질 확률을 줄일 수 있다.
 
-When persistent volumes are created, the `PersistentVolumeLabel`
-admission controller automatically adds zone labels to them.  The scheduler (via the
-`VolumeZonePredicate` predicate) will then ensure that pods that claim a
+퍼시스턴트 볼륨을 생성할 때, 
+`PersistentVolumeLabel` 어드미션 컨트롤러는 자동적으로 영역 레이블을 추가한다. 
+The scheduler (`VolumeZonePredicate`를 통해) will then ensure that pods that claim a
 given volume are only placed into the same zone as that volume, as volumes
 cannot be attached across zones.
 
