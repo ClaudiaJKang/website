@@ -14,87 +14,87 @@ weight: 60
 
 {{% capture body %}}
 
-## Scheduling overview {#scheduling}
+## 스케줄링 개요 {#scheduling}
 
-A scheduler watches for newly created Pods that have no Node assigned. For
-every Pod that the scheduler discovers, the scheduler becomes responsible
-for finding the best Node for that Pod to run on. The scheduler reaches
-this placement decision taking into account the scheduling principles
-described below.
+스케줄러는 노드가 할당되지 않은 새로 생성된 파드를 감시한다.
+스케줄러가 발견한 모든 파드에 대해,
+스케줄러는 해당 파드를 실행하기 위한 최적의 노드를 찾는 책임이 있다.
+스케줄러는 아래에 설명된 스케줄링 원칙을 고려하여
+이 배치 결정에 도달한다.
 
-If you want to understand why Pods are placed onto a particular Node,
-or if you're planning to implement a custom scheduler yourself, this
-page will help you learn about scheduling.
+파드가 특정 노드에 배치되는 이유를 알고 싶거나,
+또는 사용자 맞춤 스케줄러를 직접 구현하려는 경우
+이 페이지는 스케줄링에 대해 배우는 데 도움이 될 것이다.
 
 ## kube-scheduler
 
-[kube-scheduler](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-scheduler/)
-is the default scheduler for Kubernetes and runs as part of the
-{{< glossary_tooltip text="control plane" term_id="control-plane" >}}.
-kube-scheduler is designed so that, if you want and need to, you can
-write your own scheduling component and use that instead.
+[kube-scheduler](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-scheduler/)는
+쿠버네티스의 기본 스케줄러이고,
+{{< glossary_tooltip text="컨트롤 플레인" term_id="control-plane" >}} 의 일부로 실행한다.
+kube-scheduler는 원하고 필요에 따라 자체 스케줄링 컴포넌트를 작성하여 
+대신 사용할 수 있도록 설계되었다.
 
-For every newly created pod or other unscheduled pods, kube-scheduler
-selects a optimal node for them to run on.  However, every container in
-pods has different requirements for resources and every pod also has
-different requirements. Therefore, existing nodes need to be filtered
-according to the specific scheduling requirements.
+새롭게 생성된 파드 또는 다른 스케줄되지 않은 파드들을 대해,
+kube-scheduler는 그것을 실행할 최적의 노드를 선택한다. 
+그러나, 파드 내의 모든 컨테이너는 리소스에 대한 요구 사항이 다르며, 또한, 모든 파드에도 요구 사항이 다르다.
+따라서, 특정한 스케줄링 요구 사항에 따라 
+기존 노드를 필터링해야 한다.
 
-In a cluster, Nodes that meet the scheduling requirements for a Pod
-are called _feasible_ nodes. If none of the nodes are suitable, the pod
-remains unscheduled until the scheduler is able to place it.
+클러스터에서, 한 파드의 스케줄링 요구사항을 만족시키는 노드는 _실행 가능한_ 노드라고 한다.
+적합한 노드가 없다면, 
+스케줄러가 배치할 수 있을 때까지 파드는 스케줄링되지 않은 상태로 유지된다.
 
-The scheduler finds feasible Nodes for a Pod and then runs a set of
-functions to score the feasible Nodes and picks a Node with the highest
-score among the feasible ones to run the Pod. The scheduler then notifies
-the API server about this decision in a process called _binding_.
+스케줄러는 한 파드를 위한 실행 가능한 노드를 찾은 다음,
+실행 가능한 노드를 점수를 매기기 위해 함수의 집합을 실행하고, 
+실행 가능한 노드 중에서 가장 높은 점수를 가진 노드를 선택하여 파드를 실행한다.
+그런 다음 스케줄러는 _binding_ 이라는 단계에서 이 결정에 대해 API 서버에 알린다.
 
-Factors that need taken into account for scheduling decisions include
-individual and collective resource requirements, hardware / software /
-policy constraints, affinity and anti-affinity specifications, data
-locality, inter-workload interference, and so on.
+스케줄링 결정을 위한 기술을 검토가 필요한 팩터에는
+개별적이고 집합적인 자원 요구사항, 하드웨어 / 소프트웨어 / 정책 제약,
+어피니티와 안티-어피니티 명세, 데이터 장소,
+내부 워크로드 간섭 등이 포함된다.
 
-## Scheduling with kube-scheduler {#kube-scheduler-implementation}
+## kube-scheduler 스케줄링 {#kube-scheduler-implementation}
 
-kube-scheduler selects a node for the pod in a 2-step operation:
+kube-scheduler 2가지 단계에서 파드를 위한 노드를 선택한다.
 
-1. Filtering
+1. 필터링
 
-2. Scoring
-
-
-The _filtering_ step finds the set of Nodes where it's feasible to
-schedule the Pod. For example, the PodFitsResources filter checks whether a
-candidate Node has enough available resource to meet a Pod's specific
-resource requests. After this step, the node list contains any suitable
-Nodes; often, there will be more than one. If the list is empty, that
-Pod isn't (yet) schedulable.
-
-In the _scoring_ step, the scheduler ranks the remaining nodes to choose
-the most suitable Pod placement. The scheduler assigns a score to each Node
-that survived filtering, basing this score on the active scoring rules.
-
-Finally, kube-scheduler assigns the Pod to the Node with the highest ranking.
-If there is more than one node with equal scores, kube-scheduler selects
-one of these at random.
+2. 득점(Scoring)
 
 
-### Default policies
+_필터링_ 단계에서는 파드를 스케줄하기 위한 실행 가능한 노드의 집합을 찾는다.
+예를 들어, PodFitsResources 필터는 후보 노드가 
+파드의 특정한 리소스 요청을 만족시키는 
+충분히 이용 가능한 자원을 가지고 있는지를 확인한다.
+이 단계 이후에는, 노드 리스트는 모든 적합한 노드를 포함한다. 종종, 1개보다 더 많을 수도 있다.
+만약 이 리스트가 비어있다면, 파드는 여전히 스케줄되지 않는다.
 
-kube-scheduler has a default set of scheduling policies.
+_득점(scoring)_ 단계에서는, 스케줄러는 가장 적합한 파드 장소를 선택하기 위해 남아있는 노드를
+순서대로 놓는다. 
+스케줄러는 유효한 점수 규칙을 기준으로 필터링되어 살아남은 각 노드에 점수를 지정한다.
 
-### Filtering
+마침내, kube-schedular는 가장 높은 등수의 누드에 파드를 배정한다.
+만약 동일한 점수의 노드가 1개 이상 존재한다면,
+kube-schedular는 그 중에서 1개를 랜덤으로 선택한다.
 
-- `PodFitsHostPorts`: Checks if a Node has free ports (the network protocol kind)
-  for the Pod ports the Pod is requesting.
 
-- `PodFitsHost`: Checks if a Pod specifies a specific Node by its hostname.
+### 기본 정책 {#default-policies}
 
-- `PodFitsResources`: Checks if the Node has free resources (eg, CPU and Memory)
-  to meet the requirement of the Pod.
+kube-scheduler는 스케줄링 정책의 기본 집합을 가진다.
 
-- `PodMatchNodeSelector`: Checks if a Pod's Node {{< glossary_tooltip term_id="selector" >}}
-   matches the Node's {{< glossary_tooltip text="label(s)" term_id="label" >}}.
+### 필터링
+
+- `PodFitsHostPorts`: 노드에 파드가 요청하고 있는 파드 포트에 대한
+  사용 가능한 포트(네트워크 프로토콜 종류)가 있는지 확인한다.
+
+- `PodFitsHost`: 파드가 호스트네임에 따라 노드를 명시하고 있는지 확인한다.
+
+- `PodFitsResources`: 노드가 파드의 요구사항을 만족시킬 수 있는 사용 가능한 자원(예. CPU와 메모리)을
+  가지고 있는지 확인한다. 
+
+- `PodMatchNodeSelector`: 파드의 노드 ({{< glossary_tooltip term_id="selector" >}} )가
+   노드의 ({{< glossary_tooltip text="label(s)" term_id="label" >}} )과 일치하는지 확인한다.
 
 - `NoVolumeZoneConflict`: Evaluate if the {{< glossary_tooltip text="Volumes" term_id="volume" >}}
   that a Pod requests are available on the Node, given the failure zone restrictions for
@@ -128,7 +128,7 @@ kube-scheduler has a default set of scheduling policies.
   This applies for both bound and unbound
   {{< glossary_tooltip text="PVCs" term_id="persistent-volume-claim" >}}.
 
-### Scoring
+### 득점(Scoring)
 
 - `SelectorSpreadPriority`: Spreads Pods across hosts, considering Pods that
    belong to the same {{< glossary_tooltip text="Service" term_id="service" >}},
@@ -180,10 +180,10 @@ kube-scheduler has a default set of scheduling policies.
 
 {{% /capture %}}
 {{% capture whatsnext %}}
-* Read about [scheduler performance tuning](/docs/concepts/scheduling/scheduler-perf-tuning/)
-* Read about [Pod topology spread constraints](/docs/concepts/workloads/pods/pod-topology-spread-constraints/)
-* Read the [reference documentation](/docs/reference/command-line-tools-reference/kube-scheduler/) for kube-scheduler
-* Learn about [configuring multiple schedulers](/docs/tasks/administer-cluster/configure-multiple-schedulers/)
-* Learn about [topology management policies](/docs/tasks/administer-cluster/topology-manager/)
-* Learn about [Pod Overhead](/docs/concepts/configuration/pod-overhead/)
+* [스케줄러 성능 튜닝](/ko/docs/concepts/scheduling/scheduler-perf-tuning/)에 대해 읽기
+* [파드 토폴로지 분배 제약 조건](/ko/docs/concepts/workloads/pods/pod-topology-spread-constraints/)에 대해 읽기
+* kube-scheduler를 위한 [레퍼런스 문서](/docs/reference/command-line-tools-reference/kube-scheduler/) 읽기
+* [다중 스케줄러 구성하기](/docs/tasks/administer-cluster/configure-multiple-schedulers/)에 대해 알아보기
+* [토폴로지 관리 정책](/docs/tasks/administer-cluster/topology-manager/)에 대해 알아보기
+* [파드 오버헤드](/docs/concepts/configuration/pod-overhead/)에 대해 알아보기
 {{% /capture %}}
