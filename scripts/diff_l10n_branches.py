@@ -4,6 +4,9 @@ import os
 import subprocess
 import jinja2
 import click
+import requests
+import json
+from auth import Authorization
 
 DEVNULL = open(os.devnull, 'w')
 ISSUE_TEMPLATE = """\
@@ -11,17 +14,17 @@ ISSUE_TEMPLATE = """\
 ## Problem
 Outdated files in the {{ r_commit }} branch.
 
-### {{ files_to_be_modified | count }} files to be modified 
+### {{ files_to_be_modified | count }} files to be modified
 {% for m_file in files_to_be_modified -%}
-  1. [ ] {{ m_file.filepath }} {{ m_file.shortstat }}
+  1. [ ] [{{ m_file.filepath }}]({{ file_url_path }}{{ m_file.filepath }}) {{ m_file.shortstat }}
 {% endfor %}
 
-### {{ files_to_be_renamed | count }} files to be renamed  
+### {{ files_to_be_renamed | count }} files to be renamed
 {% for r_file in files_to_be_renamed -%}
-  1. [ ] {{ r_file.diff_status_letter }} {{ r_file.src_filepath }} -> {{ r_file.dest_filepath }}
+  1. [ ] {{ r_file.diff_status_letter }} {{ r_file.src_filepath }} -> [{{ r_file.dest_filepath }}]({{ file_url_path }}{{ r_file.dest_filepath }})
 {% endfor %}
 
-### {{ files_to_be_deleted | count }} files to be deleted 
+### {{ files_to_be_deleted | count }} files to be deleted
 {% for d_file in files_to_be_deleted -%}
   1. [ ] {{ d_file }}
 {% endfor %}
@@ -30,14 +33,14 @@ Outdated files in the {{ r_commit }} branch.
 
 {% if files_to_be_modified %}
 
-Use `git diff` to check what is changed in the upstream. And apply the upstream changes manually 
+Use `git diff` to check what is changed in the upstream. And apply the upstream changes manually
 to the `{{ l10n_lang_path }}` of `{{ r_commit }}` branch.
 
 For example:
 ```
 # checkout `{{ r_commit }}`
 ...
-# check what is updated in the upstream 
+# check what is updated in the upstream
 git diff {{ l_commit }} {{ r_commit }} -- {{ files_to_be_modified.0.filepath }}
 # apply changes to {{ l10n_lang_path }}
 vi {{ files_to_be_modified.0.filepath | replace(src_lang_path, l10n_lang_path) }}
@@ -104,6 +107,41 @@ def git_diff_name_status(l_commit, r_commit, src_lang_path, l10n_lang_path):
                             l10n_lang_path)
 
 
+def make_github_issue(title, body=None, assignee=None, milestone=None, labels=None):
+    # Authentication for user filing issue (must have read/write access to
+    # repository to add issue to)
+    USERNAME = os.envirom['GITHUB_ID']
+    PASSWORD = os.environ['GITHUB_PASSWORD']
+
+    # The repository to add this issue to
+    REPO_OWNER = os.environ['PROJ_OWNER']
+    REPO_NAME = os.environ['REPO_NAME']
+
+    '''Create an issue on github.com using the given parameters.'''
+    # Our url to create issues via POST
+    url = 'https://api.github.com/repos/%s/%s/issues' % (REPO_OWNER, REPO_NAME)
+
+    # Create an authenticated session to create the issue
+    session = requests.Session()
+    session.auth = (USERNAME, PASSWORD)
+
+    # Create our issue
+    issue = {'title': title,
+             'body': body,
+             'assignee': assignee,
+             'milestone': milestone,
+             'labels': labels}
+    # Add the issue to our repository
+    r = session.post(url, json.dumps(issue))
+    if r.status_code == 201:
+        print_message = "Successfully created Issue {}".format(title)
+        print(print_message)
+    else:
+        print_message = "Could not create Issue {}\n".format(title)
+        print_message = print_message + "Response : {}".format(r.content)
+        print(print_message)
+
+
 @click.command()
 @click.argument("l10n-lang")
 @click.argument("l-commit")
@@ -121,17 +159,30 @@ def main(l10n_lang, src_lang, l_commit, r_commit):
     """
     l10n_lang_path = "content/" + l10n_lang
     src_lang_path = "content/" + src_lang
+    file_url_path = "https://github.com/kubernetes/website/tree/{}/".format(r_commit)
     git_diff_name_status(l_commit, r_commit, src_lang_path,
                          l10n_lang_path)
     issue_template = jinja2.Template(ISSUE_TEMPLATE)
     ret = issue_template.render(l_commit=l_commit, r_commit=r_commit,
+                                file_url_path=file_url_path,
                                 src_lang_path=src_lang_path,
                                 l10n_lang_path=l10n_lang_path,
                                 files_to_be_deleted=files_to_be_deleted,
                                 files_to_be_modified=files_to_be_modified,
                                 files_to_be_renamed=files_to_be_renamed)
+    label = list()
+    language = "language/{}".format(l10n_lang)
+    label.append(language)
+    issue_title = ret.splitlines()[2]
+    add_labels = "\n/language {}".format(l10n_lang)
+
+    ret = ret+add_labels
+
+    make_github_issue(title=issue_title, body=ret, labels=label)
     print(ret)
 
 
 if __name__ == "__main__":
     main()
+
+
